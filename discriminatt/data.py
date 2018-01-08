@@ -1,6 +1,8 @@
 import pkg_resources
 import os
+
 import attr
+import numpy as np
 
 
 # Use attr (an upgrade to namedtuple) to make a class that represents an
@@ -34,6 +36,3 @@ def read_data(name):
         discriminative = bool(int(strval))
         examples.append(AttributeExample(word1, word2, attribute, discriminative))
     return examples
-
-
-print(read_data('trial/ref/truth.txt'))
