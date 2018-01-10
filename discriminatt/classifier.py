@@ -5,7 +5,7 @@ from sklearn.svm import SVC
 from conceptnet5.vectors.query import VectorSpaceWrapper
 from conceptnet5.nodes import concept_uri
 from conceptnet5.util import get_data_filename as get_conceptnet_data_filename
-from discriminatt.data import AttributeExample, read_data
+from discriminatt.data import AttributeExample, read_data, read_phrases
 
 
 class AttributeClassifier:
@@ -98,6 +98,46 @@ class RelatednessClassifier(AttributeClassifier):
         return predictions
 
 
+class MultipleFeaturesClassifier(AttributeClassifier):
+    def __init__(self, embeddings_filename, phrases_filename):
+        self.wrap = VectorSpaceWrapper(embeddings_filename)
+        self.phrases = read_phrases(phrases_filename)
+        self.svm = None
+
+    def find_relatedness(self, example):
+        term1 = concept_uri('en', example.word1)
+        term2 = concept_uri('en', example.word2)
+        att = concept_uri('en', example.attribute)
+
+        match1 = self.wrap.get_similarity(term1, att)
+        match2 = self.wrap.get_similarity(term2, att)
+        return [match1, match2]
+
+    def find_phrase_hit(self, example):
+        phrase1 = '{} {}'.format(example.word1, example.attribute)
+        phrase2 = '{} {}'.format(example.word2, example.attribute)
+        return [phrase1 in self.phrases, phrase2 in self.phrases]
+
+    def extract_features(self, examples, desc):
+        features = []
+        for example in progress_bar(examples, desc=desc):
+            relatedness = self.find_relatedness(example)
+            phrase_hits = self.find_phrase_hit(example)
+            features.append(relatedness + phrase_hits)
+        return features
+
+    def train(self, examples):
+        self.svm = SVC()
+        inputs = self.extract_features(examples, desc='Training')
+        outputs = np.array([example.discriminative for example in examples])
+        self.svm.fit(inputs, outputs)
+
+    def classify(self, examples):
+        inputs = self.extract_features(examples, desc='Testing')
+        predictions = self.svm.predict(inputs)
+        return predictions
+
+
 if __name__ == '__main__':
     cl = ConstantBaselineClassifier()
     print(cl.evaluate())
@@ -105,3 +145,6 @@ if __name__ == '__main__':
     conceptnet_relatedness = RelatednessClassifier(get_conceptnet_data_filename('vectors-20180108/numberbatch-biased.h5'))
     print(conceptnet_relatedness.evaluate())
 
+    multiple_features = MultipleFeaturesClassifier(get_conceptnet_data_filename(
+        'vectors-20180108/numberbatch-biased.h5'), 'google-books-2grams.txt')
+    print(multiple_features.evaluate())

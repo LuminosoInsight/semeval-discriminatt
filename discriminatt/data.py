@@ -23,6 +23,10 @@ def get_data_filename(filename):
     )
 
 
+def get_other_data_filename(filename):
+    return pkg_resources.resource_filename('discriminatt', os.path.join('data', filename))
+
+
 def read_data(name):
     """
     Read the list of examples from one of the included data files.
@@ -36,3 +40,13 @@ def read_data(name):
         discriminative = bool(int(strval))
         examples.append(AttributeExample(word1, word2, attribute, discriminative))
     return examples
+
+
+def read_phrases(name):
+    """
+     TODO
+    """
+    filename = get_other_data_filename(name)
+    with open(filename, encoding='utf-8') as input_file:
+        data = set(line.split(',')[0].lower() for line in input_file)
+    return data
