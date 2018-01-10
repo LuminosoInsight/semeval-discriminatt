@@ -4,8 +4,7 @@ from sklearn.svm import SVC
 
 from conceptnet5.vectors.query import VectorSpaceWrapper
 from conceptnet5.nodes import concept_uri
-from conceptnet5.util import get_data_filename as get_conceptnet_data_filename
-from discriminatt.data import AttributeExample, read_data
+from discriminatt.data import AttributeExample, read_semeval_data, get_external_data_filename
 
 
 class AttributeClassifier:
@@ -37,8 +36,8 @@ class AttributeClassifier:
         """
         Train this learning strategy, and evaluate its accuracy on the validation set.
         """
-        training_examples = read_data('training/train.txt')
-        test_examples = read_data('training/validation.txt')
+        training_examples = read_semeval_data('training/train.txt')
+        test_examples = read_semeval_data('training/validation.txt')
 
         self.train(training_examples)
         our_answers = np.array(self.classify(test_examples))
@@ -62,7 +61,7 @@ class ConstantBaselineClassifier(AttributeClassifier):
 class RelatednessClassifier(AttributeClassifier):
     """
     A straightforward but under-powered strategy that uses word vectors.
-    
+
     Compare the relatedness of (word1, attribute) and the relatedness of
     (word2, attribute), using the provided VectorSpaceWrapper of word vectors.
     The two relatedness scores are given to an SVM classifier, which decides
@@ -83,7 +82,7 @@ class RelatednessClassifier(AttributeClassifier):
 
             match1 = self.wrap.get_similarity(term1, att)
             match2 = self.wrap.get_similarity(term2, att)
-            relatedness_by_example.append([match1, match2])
+            relatedness_by_example.append([match1, match2, match1 - match2])
         return relatedness_by_example
 
     def train(self, examples):
@@ -102,6 +101,6 @@ if __name__ == '__main__':
     cl = ConstantBaselineClassifier()
     print(cl.evaluate())
 
-    conceptnet_relatedness = RelatednessClassifier(get_conceptnet_data_filename('vectors-20180108/numberbatch-biased.h5'))
+    conceptnet_relatedness = RelatednessClassifier(get_external_data_filename('numberbatch-20180108-biased.h5'))
     print(conceptnet_relatedness.evaluate())
 

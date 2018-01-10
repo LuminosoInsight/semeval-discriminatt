@@ -56,3 +56,6 @@ docs/_build/
 *~
 .*.swp
 \#*
+
+# data directory
+more-data

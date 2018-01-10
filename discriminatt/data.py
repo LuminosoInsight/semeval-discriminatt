@@ -13,9 +13,9 @@ AttributeExample = attr.make_class(
 )
 
 
-def get_data_filename(filename):
+def get_semeval_data_filename(filename):
     """
-    Get a valid path referring to a given filename in the `data`
+    Get a valid path referring to a given filename in the `semeval-data`
     subdirectory of the package.
     """
     return pkg_resources.resource_filename(
@@ -23,13 +23,23 @@ def get_data_filename(filename):
     )
 
 
-def read_data(name):
+def get_external_data_filename(filename):
+    """
+    Get a valid path referring to a given filename in the `more-data`
+    subdirectory of the package.
+    """
+    return pkg_resources.resource_filename(
+        'discriminatt', os.path.join('more-data', filename)
+    )
+
+
+def read_semeval_data(name):
     """
     Read the list of examples from one of the included data files.
 
-    Example: read_data('training/train.txt')
+    Example: read_semeval_data('training/train.txt')
     """
-    filename = get_data_filename(name)
+    filename = get_semeval_data_filename(name)
     examples = []
     for line in open(filename, encoding='utf-8'):
         word1, word2, attribute, strval = line.rstrip().split(',')
