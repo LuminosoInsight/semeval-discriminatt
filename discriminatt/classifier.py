@@ -5,7 +5,7 @@ from sklearn.svm import SVC
 from conceptnet5.vectors.query import VectorSpaceWrapper
 from conceptnet5.nodes import concept_uri
 from conceptnet5.util import get_data_filename as get_conceptnet_data_filename
-from discriminatt.data import AttributeExample, read_data
+from discriminatt.data import AttributeExample, read_data, read_phrases
 
 
 class AttributeClassifier:
@@ -98,10 +98,38 @@ class RelatednessClassifier(AttributeClassifier):
         return predictions
 
 
+class PhrasesClassifier(AttributeClassifier):
+    def __init__(self, phrases_filename):
+        self.phrases = read_phrases(phrases_filename)
+        self.smv = None
+
+    def phrase_hit(self, examples, desc):
+        phrase_hits = []
+        for example in progress_bar(examples, desc=desc):
+            phrase1 = '{} {}'.format(example.word1, example.attribute)
+            phrase2 = '{} {}'.format(example.word2, example.attribute)
+            phrase_hits.append([phrase1 in self.phrases, phrase2 in self.phrases])
+        return phrase_hits
+
+    def train(self, examples):
+        self.svm = SVC()
+        inputs = self.phrase_hit(examples, desc='Training')
+        outputs = np.array([example.discriminative for example in examples])
+        self.svm.fit(inputs, outputs)
+
+    def classify(self, examples):
+        inputs = self.phrase_hit(examples, desc='Testing')
+        predictions = self.svm.predict(inputs)
+        return predictions
+
+
 if __name__ == '__main__':
     cl = ConstantBaselineClassifier()
     print(cl.evaluate())
 
     conceptnet_relatedness = RelatednessClassifier(get_conceptnet_data_filename('vectors-20180108/numberbatch-biased.h5'))
     print(conceptnet_relatedness.evaluate())
+
+    phrases = PhrasesClassifier('google-books-2grams.txt')
+    print(phrases.evaluate())
 
