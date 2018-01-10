@@ -98,27 +98,42 @@ class RelatednessClassifier(AttributeClassifier):
         return predictions
 
 
-class PhrasesClassifier(AttributeClassifier):
-    def __init__(self, phrases_filename):
+class MultipleFeaturesClassifier(AttributeClassifier):
+    def __init__(self, embeddings_filename, phrases_filename):
+        self.wrap = VectorSpaceWrapper(embeddings_filename)
         self.phrases = read_phrases(phrases_filename)
-        self.smv = None
+        self.svm = None
 
-    def phrase_hit(self, examples, desc):
-        phrase_hits = []
+    def find_relatedness(self, example):
+        term1 = concept_uri('en', example.word1)
+        term2 = concept_uri('en', example.word2)
+        att = concept_uri('en', example.attribute)
+
+        match1 = self.wrap.get_similarity(term1, att)
+        match2 = self.wrap.get_similarity(term2, att)
+        return [match1, match2]
+
+    def find_phrase_hit(self, example):
+        phrase1 = '{} {}'.format(example.word1, example.attribute)
+        phrase2 = '{} {}'.format(example.word2, example.attribute)
+        return [phrase1 in self.phrases, phrase2 in self.phrases]
+
+    def extract_features(self, examples, desc):
+        features = []
         for example in progress_bar(examples, desc=desc):
-            phrase1 = '{} {}'.format(example.word1, example.attribute)
-            phrase2 = '{} {}'.format(example.word2, example.attribute)
-            phrase_hits.append([phrase1 in self.phrases, phrase2 in self.phrases])
-        return phrase_hits
+            relatedness = self.find_relatedness(example)
+            phrase_hits = self.find_phrase_hit(example)
+            features.append(relatedness + phrase_hits)
+        return features
 
     def train(self, examples):
         self.svm = SVC()
-        inputs = self.phrase_hit(examples, desc='Training')
+        inputs = self.extract_features(examples, desc='Training')
         outputs = np.array([example.discriminative for example in examples])
         self.svm.fit(inputs, outputs)
 
     def classify(self, examples):
-        inputs = self.phrase_hit(examples, desc='Testing')
+        inputs = self.extract_features(examples, desc='Testing')
         predictions = self.svm.predict(inputs)
         return predictions
 
@@ -130,6 +145,6 @@ if __name__ == '__main__':
     conceptnet_relatedness = RelatednessClassifier(get_conceptnet_data_filename('vectors-20180108/numberbatch-biased.h5'))
     print(conceptnet_relatedness.evaluate())
 
-    phrases = PhrasesClassifier('google-books-2grams.txt')
-    print(phrases.evaluate())
-
+    multiple_features = MultipleFeaturesClassifier(get_conceptnet_data_filename(
+        'vectors-20180108/numberbatch-biased.h5'), 'google-books-2grams.txt')
+    print(multiple_features.evaluate())
