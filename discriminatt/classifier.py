@@ -5,6 +5,7 @@ from sklearn.svm import SVC
 from conceptnet5.vectors.query import VectorSpaceWrapper
 from conceptnet5.nodes import concept_uri
 from discriminatt.data import AttributeExample, read_semeval_data, get_external_data_filename, read_phrases
+from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
 
 
 class AttributeClassifier:
@@ -82,7 +83,15 @@ class RelatednessClassifier(AttributeClassifier):
 
             match1 = self.wrap.get_similarity(term1, att)
             match2 = self.wrap.get_similarity(term2, att)
-            relatedness_by_example.append([match1, match2, match1 - match2])
+            connected_match1 = max([
+                self.wrap.get_similarity(c, att)
+                for c in wordnet_connected_conceptnet_nodes(example.word1)
+            ])
+            connected_match2 = max([
+                self.wrap.get_similarity(c, att)
+                for c in wordnet_connected_conceptnet_nodes(example.word2)
+            ])
+            relatedness_by_example.append([match1, match2, connected_match1, connected_match2])
         return relatedness_by_example
 
     def train(self, examples):
@@ -102,15 +111,24 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         self.wrap = VectorSpaceWrapper(get_external_data_filename(embeddings_filename))
         self.phrases = read_phrases(phrases_filename)
         self.svm = None
-
+    
     def find_relatedness(self, example):
+        relatedness_by_example = []
         term1 = concept_uri('en', example.word1)
         term2 = concept_uri('en', example.word2)
         att = concept_uri('en', example.attribute)
 
         match1 = self.wrap.get_similarity(term1, att)
         match2 = self.wrap.get_similarity(term2, att)
-        return [match1, match2]
+        connected_match1 = max([
+            self.wrap.get_similarity(c, att)
+            for c in wordnet_connected_conceptnet_nodes(example.word1)
+        ])
+        connected_match2 = max([
+            self.wrap.get_similarity(c, att)
+            for c in wordnet_connected_conceptnet_nodes(example.word2)
+        ])
+        return [match1, match2, connected_match1, connected_match2]
 
     def find_phrase_hit(self, example):
         phrase1 = '{} {}'.format(example.word1, example.attribute)
@@ -140,9 +158,6 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 if __name__ == '__main__':
     cl = ConstantBaselineClassifier()
     print(cl.evaluate())
-
-    conceptnet_relatedness = RelatednessClassifier(get_external_data_filename('numberbatch-20180108-biased.h5'))
-    print(conceptnet_relatedness.evaluate())
 
     multiple_features = MultipleFeaturesClassifier(
         'numberbatch-20180108-biased.h5',

@@ -1,6 +1,7 @@
 import nltk
 from nltk.corpus import wordnet
 from conceptnet5.language.english import LEMMATIZER
+from conceptnet5.nodes import standardized_concept_uri
 from wordfreq.tokens import tokenize
 
 get_synset = wordnet._synset_from_pos_and_offset
@@ -54,4 +55,11 @@ def get_wordnet_connected_words(word):
         for example in entry['examples']:
             words.extend(tokenize(example, 'en'))
     return words
+
+
+def wordnet_connected_conceptnet_nodes(word):
+    nodes = [standardized_concept_uri('en', word)]
+    for conn in get_wordnet_connected_words(word):
+        nodes.append(standardized_concept_uri('en', conn))
+    return nodes
 
