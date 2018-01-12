@@ -2,10 +2,11 @@ import numpy as np
 from tqdm import tqdm as progress_bar
 from sklearn.svm import SVC
 
-from conceptnet5.vectors.query import VectorSpaceWrapper
+from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
 from conceptnet5.nodes import concept_uri
 from discriminatt.data import AttributeExample, read_semeval_data, get_external_data_filename, read_phrases
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
+from discriminatt.wikipedia import wikipedia_summary
 
 
 class AttributeClassifier:
@@ -109,8 +110,20 @@ class RelatednessClassifier(AttributeClassifier):
 class MultipleFeaturesClassifier(AttributeClassifier):
     def __init__(self, embeddings_filename, phrases_filename):
         self.wrap = VectorSpaceWrapper(get_external_data_filename(embeddings_filename))
+        self.cache = {}
         self.phrases = read_phrases(phrases_filename)
         self.svm = None
+
+    def get_vector(self, uri):
+        if uri in self.cache:
+            return self.cache[uri]
+        else:
+            vec = normalize_vec(get_vector(self.wrap.frame, uri))
+            self.cache[uri] = vec
+            return vec
+
+    def get_similarity(self, uri1, uri2):
+        return self.get_vector(uri1).dot(self.get_vector(uri2))
     
     def find_relatedness(self, example):
         relatedness_by_example = []
