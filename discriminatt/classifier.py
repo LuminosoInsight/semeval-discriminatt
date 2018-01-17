@@ -48,7 +48,7 @@ class AttributeClassifier:
         print("Testing")
         our_answers = np.array(self.classify(test_examples))
         real_answers = np.array([example.discriminative for example in test_examples])
-        acc = np.equal(our_answers, real_answers) / len(real_answers)
+        acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
         return acc
 
 
