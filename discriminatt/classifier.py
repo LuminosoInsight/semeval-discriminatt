@@ -1,11 +1,12 @@
 import numpy as np
 from tqdm import tqdm as progress_bar
 import sqlite3
+import os
 from sklearn.svm import SVC
 
 from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
 from conceptnet5.nodes import concept_uri
-from discriminatt.data import AttributeExample, read_semeval_data, get_external_data_filename, read_phrases
+from discriminatt.data import AttributeExample, read_semeval_data, get_external_data_filename, get_result_filename, read_phrases
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
 from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 
@@ -42,70 +43,13 @@ class AttributeClassifier:
         training_examples = read_semeval_data('training/train.txt')
         test_examples = read_semeval_data('training/validation.txt')
 
+        print("Training")
         self.train(training_examples)
+        print("Testing")
         our_answers = np.array(self.classify(test_examples))
         real_answers = np.array([example.discriminative for example in test_examples])
-
-        acc = (our_answers == real_answers).sum() / len(real_answers)
+        acc = np.equal(our_answers, real_answers) / len(real_answers)
         return acc
-
-
-class ConstantBaselineClassifier(AttributeClassifier):
-    """
-    A trivial example of a classification strategy.
-
-    It gets 50.1% accuracy on the validation data, because that data has
-    roughly equal numbers of true and false examples.
-    """
-    def classify(self, examples):
-        return np.array([True] * len(examples))
-
-
-class RelatednessClassifier(AttributeClassifier):
-    """
-    A straightforward but under-powered strategy that uses word vectors.
-
-    Compare the relatedness of (word1, attribute) and the relatedness of
-    (word2, attribute), using the provided VectorSpaceWrapper of word vectors.
-    The two relatedness scores are given to an SVM classifier, which decides
-    how these scores determine whether the attribute is discriminative.
-
-    Scores 56.5% using a recent ConceptNet Numberbatch mini.h5.
-    """
-    def __init__(self, embedding_filename):
-        self.wrap = VectorSpaceWrapper(embedding_filename, use_db=False)
-        self.svm = None
-
-    def find_relatedness(self, examples, desc='Training'):
-        relatedness_by_example = []
-        for example in progress_bar(examples, desc=desc):
-            term1 = concept_uri('en', example.word1)
-            term2 = concept_uri('en', example.word2)
-            att = concept_uri('en', example.attribute)
-
-            match1 = self.wrap.get_similarity(term1, att)
-            match2 = self.wrap.get_similarity(term2, att)
-            connected_match1 = max([
-                self.wrap.get_similarity(c, att)
-                for c in wordnet_connected_conceptnet_nodes(example.word1)
-            ])
-            connected_match2 = max([
-                self.wrap.get_similarity(c, att)
-                for c in wordnet_connected_conceptnet_nodes(example.word2)
-            ])
-            relatedness_by_example.append([match1, match2, connected_match1, connected_match2])
-        return relatedness_by_example
-
-    def train(self, examples):
-        self.svm = SVC()
-        inputs = self.find_relatedness(examples, desc='Training')
-        outputs = np.array([example.discriminative for example in examples])
-        self.svm.fit(inputs, outputs)
-
-    def classify(self, examples):
-        inputs = self.find_relatedness(examples, desc='Testing')
-        predictions = self.svm.predict(inputs)
-        return predictions
 
 
 class MultipleFeaturesClassifier(AttributeClassifier):
@@ -116,73 +60,93 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         self.wp_db = sqlite3.connect(get_external_data_filename(wikipedia_filename))
         self.svm = None
 
+        self.feature_methods = [
+            self.direct_relatedness_features,
+            self.wikipedia_relatedness_features,
+            self.wordnet_relatedness_features,
+            self.phrase_hit_features
+        ]
+
     def get_vector(self, uri):
         if uri in self.cache:
             return self.cache[uri]
         else:
-            vec = normalize_vec(get_vector(self.wrap.frame, uri))
+            vec = normalize_vec(self.wrap.get_vector(uri))
             self.cache[uri] = vec
             return vec
 
     def get_similarity(self, uri1, uri2):
         return self.get_vector(uri1).dot(self.get_vector(uri2))
 
-    def find_relatedness(self, example):
-        relatedness_by_example = []
+    def direct_relatedness_features(self, example):
         term1 = concept_uri('en', example.word1)
         term2 = concept_uri('en', example.word2)
         att = concept_uri('en', example.attribute)
+        match1 = self.get_similarity(term1, att)
+        match2 = self.get_similarity(term2, att)
+        return np.array([match1, match2])
 
-        match1 = self.wrap.get_similarity(term1, att)
-        match2 = self.wrap.get_similarity(term2, att)
-        connected_match1 = max([
-            self.wrap.get_similarity(c, att)
-            for c in self.connected_nodes(example.word1)
-        ])
-        connected_match2 = max([
-            self.wrap.get_similarity(c, att)
-            for c in self.connected_nodes(example.word2)
-        ])
-        return [match1, match2, connected_match1, connected_match2]
+    def wikipedia_relatedness_features(self, example):
+        term1 = concept_uri('en', example.word1)
+        term2 = concept_uri('en', example.word2)
+        connected1 = [term1] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word1)
+        connected2 = [term2] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word2)
+        return self.max_relatedness_features(connected1, connected2, example.attribute)
 
-    def find_phrase_hit(self, example):
+    def wordnet_relatedness_features(self, example):
+        term1 = concept_uri('en', example.word1)
+        term2 = concept_uri('en', example.word2)
+        connected1 = [term1] + wordnet_connected_conceptnet_nodes(example.word1)
+        connected2 = [term2] + wordnet_connected_conceptnet_nodes(example.word2)
+        return self.max_relatedness_features(connected1, connected2, example.attribute)
+
+    def max_relatedness_features(self, conn1, conn2, attribute):
+        att = concept_uri('en', attribute)
+        match1 = max([self.get_similarity(c, att) for c in conn1])
+        match2 = max([self.get_similarity(c, att) for c in conn2])
+        return np.array([match1, match2])
+
+    def phrase_hit_features(self, example):
         phrase1 = '{} {}'.format(example.word1, example.attribute)
         phrase2 = '{} {}'.format(example.word2, example.attribute)
-        return [phrase1 in self.phrases, phrase2 in self.phrases]
+        return np.array([int(phrase1 in self.phrases), int(phrase2 in self.phrases)])
 
-    def connected_nodes(self, word):
-        wordnet_nodes = wordnet_connected_conceptnet_nodes(word)
-        wp_nodes = wikipedia_connected_conceptnet_nodes(self.wp_db, word)
-        connected_nodes = wordnet_nodes + wp_nodes
-        return connected_nodes
-
-    def extract_features(self, examples, desc):
-        features = []
-        for example in progress_bar(examples, desc=desc):
-            relatedness = self.find_relatedness(example)
-            phrase_hits = self.find_phrase_hit(example)
-            features.append(relatedness + phrase_hits)
-        return features
+    def extract_features(self, examples, mode='train'):
+        subarrays = []
+        for method in self.feature_methods:
+            name = method.__name__
+            feature_filename = get_result_filename('{}.{}.npy'.format(name, mode))
+            try:
+                os.mkdir(os.path.dirname(feature_filename))
+            except FileExistsError:
+                pass
+            if os.access(feature_filename, os.R_OK):
+                features = np.load(feature_filename)
+            else:
+                feature_list = []
+                for example in progress_bar(examples, desc=name):
+                    feature_list.append(method(example))
+                features = np.vstack(feature_list)
+                np.save(feature_filename, features)
+            subarrays.append(features)
+        return np.hstack(subarrays)
 
     def train(self, examples):
         self.svm = SVC()
-        inputs = self.extract_features(examples, desc='Training')
+        inputs = self.extract_features(examples, mode='train')
         outputs = np.array([example.discriminative for example in examples])
         self.svm.fit(inputs, outputs)
 
     def classify(self, examples):
-        inputs = self.extract_features(examples, desc='Testing')
+        inputs = self.extract_features(examples, mode='test')
         predictions = self.svm.predict(inputs)
         return predictions
 
 
 if __name__ == '__main__':
-    cl = ConstantBaselineClassifier()
-    print(cl.evaluate())
-
     multiple_features = MultipleFeaturesClassifier(
         'numberbatch-20180108-biased.h5',
         'google-books-2grams.txt',
-        'wikipedia.db'
+        'wikipedia-summary.db'
     )
     print(multiple_features.evaluate())

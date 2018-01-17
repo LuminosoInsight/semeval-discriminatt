@@ -33,6 +33,16 @@ def get_external_data_filename(filename):
     )
 
 
+def get_result_filename(filename):
+    """
+    Get a valid path referring to a given filename in the `results`
+    subdirectory of the package.
+    """
+    return pkg_resources.resource_filename(
+        'discriminatt', os.path.join('results', filename)
+    )
+
+
 def read_semeval_data(name):
     """
     Read the list of examples from one of the included data files.
