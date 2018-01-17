@@ -1,12 +1,13 @@
 import numpy as np
 from tqdm import tqdm as progress_bar
+import sqlite3
 from sklearn.svm import SVC
 
 from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
 from conceptnet5.nodes import concept_uri
 from discriminatt.data import AttributeExample, read_semeval_data, get_external_data_filename, read_phrases
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
-from discriminatt.wikipedia import wikipedia_summary
+from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 
 
 class AttributeClassifier:
@@ -72,7 +73,7 @@ class RelatednessClassifier(AttributeClassifier):
     Scores 56.5% using a recent ConceptNet Numberbatch mini.h5.
     """
     def __init__(self, embedding_filename):
-        self.wrap = VectorSpaceWrapper(embedding_filename)
+        self.wrap = VectorSpaceWrapper(embedding_filename, use_db=False)
         self.svm = None
 
     def find_relatedness(self, examples, desc='Training'):
@@ -108,10 +109,11 @@ class RelatednessClassifier(AttributeClassifier):
 
 
 class MultipleFeaturesClassifier(AttributeClassifier):
-    def __init__(self, embeddings_filename, phrases_filename):
-        self.wrap = VectorSpaceWrapper(get_external_data_filename(embeddings_filename))
+    def __init__(self, embeddings_filename, phrases_filename, wikipedia_filename):
+        self.wrap = VectorSpaceWrapper(get_external_data_filename(embeddings_filename), use_db=False)
         self.cache = {}
         self.phrases = read_phrases(phrases_filename)
+        self.wp_db = sqlite3.connect(get_external_data_filename(wikipedia_filename))
         self.svm = None
 
     def get_vector(self, uri):
@@ -124,7 +126,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 
     def get_similarity(self, uri1, uri2):
         return self.get_vector(uri1).dot(self.get_vector(uri2))
-    
+
     def find_relatedness(self, example):
         relatedness_by_example = []
         term1 = concept_uri('en', example.word1)
@@ -135,11 +137,11 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         match2 = self.wrap.get_similarity(term2, att)
         connected_match1 = max([
             self.wrap.get_similarity(c, att)
-            for c in wordnet_connected_conceptnet_nodes(example.word1)
+            for c in self.connected_nodes(example.word1)
         ])
         connected_match2 = max([
             self.wrap.get_similarity(c, att)
-            for c in wordnet_connected_conceptnet_nodes(example.word2)
+            for c in self.connected_nodes(example.word2)
         ])
         return [match1, match2, connected_match1, connected_match2]
 
@@ -147,6 +149,12 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         phrase1 = '{} {}'.format(example.word1, example.attribute)
         phrase2 = '{} {}'.format(example.word2, example.attribute)
         return [phrase1 in self.phrases, phrase2 in self.phrases]
+
+    def connected_nodes(self, word):
+        wordnet_nodes = wordnet_connected_conceptnet_nodes(word)
+        wp_nodes = wikipedia_connected_conceptnet_nodes(self.wp_db, word)
+        connected_nodes = wordnet_nodes + wp_nodes
+        return connected_nodes
 
     def extract_features(self, examples, desc):
         features = []
@@ -174,6 +182,7 @@ if __name__ == '__main__':
 
     multiple_features = MultipleFeaturesClassifier(
         'numberbatch-20180108-biased.h5',
-        'google-books-2grams.txt'
+        'google-books-2grams.txt',
+        'wikipedia.db'
     )
     print(multiple_features.evaluate())
