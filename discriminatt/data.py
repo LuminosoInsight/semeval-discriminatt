@@ -1,16 +1,35 @@
 import pkg_resources
 import os
 
-import attr
+from attr import attrs, attrib
 import numpy as np
+from conceptnet5.nodes import concept_uri
 
 
 # Use attr (an upgrade to namedtuple) to make a class that represents an
 # example from the training/validation/test files.
-AttributeExample = attr.make_class(
-    'AttributeExample',
-    ['word1', 'word2', 'attribute', 'discriminative']
-)
+
+@attrs
+class AttributeExample:
+    """
+    A data class that holds an individual example from this SemEval task.
+    """
+    word1 = attrib()
+    word2 = attrib()
+    attribute = attrib()
+    discriminative = attrib()
+
+    def node1(self):
+        "Get word1 as a ConceptNet URI."
+        return concept_uri('en', self.word1)
+
+    def node2(self):
+        "Get word2 as a ConceptNet URI."
+        return concept_uri('en', self.word2)
+
+    def att_node(self):
+        "Get the attribute as a ConceptNet URI."
+        return concept_uri('en', self.attribute)
 
 
 def get_semeval_data_filename(filename):

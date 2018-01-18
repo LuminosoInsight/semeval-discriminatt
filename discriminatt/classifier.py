@@ -5,7 +5,6 @@ import os
 from sklearn.svm import SVC
 
 from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
-from conceptnet5.nodes import concept_uri
 from discriminatt.data import AttributeExample, read_semeval_data, get_external_data_filename, get_result_filename, read_phrases
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
 from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
@@ -53,6 +52,15 @@ class AttributeClassifier:
 
 
 class MultipleFeaturesClassifier(AttributeClassifier):
+    """
+    Compute a number of numeric features from the examples, based on different
+    data sources. Then use the concatenation of all these features as input to
+    an SVM.
+
+    The values of each feature are cached in the `discriminatt/results`
+    directory. If you change the code of a feature, delete its corresponding cache
+    files from that directory.
+    """
     def __init__(self, embeddings_filename, phrases_filename, wikipedia_filename):
         self.wrap = VectorSpaceWrapper(get_external_data_filename(embeddings_filename), use_db=False)
         self.cache = {}
@@ -79,31 +87,23 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return self.get_vector(uri1).dot(self.get_vector(uri2))
 
     def direct_relatedness_features(self, example):
-        term1 = concept_uri('en', example.word1)
-        term2 = concept_uri('en', example.word2)
-        att = concept_uri('en', example.attribute)
-        match1 = self.get_similarity(term1, att)
-        match2 = self.get_similarity(term2, att)
+        match1 = self.get_similarity(example.node1(), example.att_node())
+        match2 = self.get_similarity(example.node2(), example.att_node())
         return np.array([match1, match2])
 
     def wikipedia_relatedness_features(self, example):
-        term1 = concept_uri('en', example.word1)
-        term2 = concept_uri('en', example.word2)
-        connected1 = [term1] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word1)
-        connected2 = [term2] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word2)
-        return self.max_relatedness_features(connected1, connected2, example.attribute)
+        connected1 = [example.node1()] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word1)
+        connected2 = [example.node2()] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word2)
+        return self.max_relatedness_features(connected1, connected2, example.att_node())
 
     def wordnet_relatedness_features(self, example):
-        term1 = concept_uri('en', example.word1)
-        term2 = concept_uri('en', example.word2)
-        connected1 = [term1] + wordnet_connected_conceptnet_nodes(example.word1)
-        connected2 = [term2] + wordnet_connected_conceptnet_nodes(example.word2)
-        return self.max_relatedness_features(connected1, connected2, example.attribute)
+        connected1 = [example.node1()] + wordnet_connected_conceptnet_nodes(example.word1)
+        connected2 = [example.node2()] + wordnet_connected_conceptnet_nodes(example.word2)
+        return self.max_relatedness_features(connected1, connected2, example.att_node())
 
-    def max_relatedness_features(self, conn1, conn2, attribute):
-        att = concept_uri('en', attribute)
-        match1 = max([self.get_similarity(c, att) for c in conn1])
-        match2 = max([self.get_similarity(c, att) for c in conn2])
+    def max_relatedness_features(self, conn1, conn2, att_node):
+        match1 = max([self.get_similarity(c, att_node) for c in conn1])
+        match2 = max([self.get_similarity(c, att_node) for c in conn2])
         return np.array([match1, match2])
 
     def phrase_hit_features(self, example):
