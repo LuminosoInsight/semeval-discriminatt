@@ -8,6 +8,7 @@ from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
 from discriminatt.data import AttributeExample, read_semeval_data, get_external_data_filename, get_result_filename, read_phrases
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
 from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
+from discriminatt.standalone_sme import StandaloneSMEModel
 
 
 class AttributeClassifier:
@@ -66,13 +67,15 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         self.cache = {}
         self.phrases = read_phrases(phrases_filename)
         self.wp_db = sqlite3.connect(get_external_data_filename(wikipedia_filename))
+        self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
         self.svm = None
 
         self.feature_methods = [
             self.direct_relatedness_features,
             self.wikipedia_relatedness_features,
             self.wordnet_relatedness_features,
-            self.phrase_hit_features
+            self.phrase_hit_features,
+            self.sme_features
         ]
 
     def get_vector(self, uri):
@@ -105,6 +108,20 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         match1 = max([self.get_similarity(c, att_node) for c in conn1])
         match2 = max([self.get_similarity(c, att_node) for c in conn2])
         return np.array([match1, match2])
+
+    def sme_features(self, example):
+        features = []
+        node1 = example.node1()
+        node2 = example.node2()
+        att = example.att_node()
+        if node1 in self.sme and node2 in self.sme and att in self.sme:
+            features.append(self.sme.predict_relations_forward(node1, att))
+            features.append(self.sme.predict_relations_backward(node1, att))
+            features.append(self.sme.predict_relations_forward(node2, att))
+            features.append(self.sme.predict_relations_backward(node2, att))
+            return np.hstack([series.data for series in features])
+        else:
+            return np.zeros(self.sme.num_rels() * 4)
 
     def phrase_hit_features(self, example):
         phrase1 = '{} {}'.format(example.word1, example.attribute)
