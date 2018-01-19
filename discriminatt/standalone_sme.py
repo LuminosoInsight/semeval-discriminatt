@@ -9,7 +9,8 @@ class StandaloneSMEModel:
         '/r/RelatedTo',
         '/r/IsA',
         '/r/HasProperty',
-        '/r/PartOf'
+        '/r/PartOf',
+        '/r/UsedFor',
     ]
     def __init__(self, dirname):
         """
