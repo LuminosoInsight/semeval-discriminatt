@@ -1,13 +1,16 @@
-import numpy as np
-from tqdm import tqdm as progress_bar
-import sqlite3
 import os
-from sklearn.svm import SVC
+import sqlite3
 
+import numpy as np
 from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
-from discriminatt.data import AttributeExample, read_semeval_data, get_external_data_filename, get_result_filename, read_phrases
-from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
+from sklearn.svm import SVC
+from tqdm import tqdm as progress_bar
+
+from discriminatt.data import read_semeval_data, get_external_data_filename, get_result_filename, read_phrases, \
+    read_search_queries
 from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
+from discriminatt.standalone_sme import StandaloneSMEModel
+from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
 
 
 class AttributeClassifier:
@@ -64,15 +67,18 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     def __init__(self, embeddings_filename, phrases_filename, wikipedia_filename):
         self.wrap = VectorSpaceWrapper(get_external_data_filename(embeddings_filename), use_db=False)
         self.cache = {}
-        self.phrases = read_phrases(phrases_filename)
         self.wp_db = sqlite3.connect(get_external_data_filename(wikipedia_filename))
+        self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
+        self.queries = read_search_queries()
+        self.phrases = read_phrases(phrases_filename)
         self.svm = None
 
         self.feature_methods = [
             self.direct_relatedness_features,
             self.wikipedia_relatedness_features,
             self.wordnet_relatedness_features,
-            self.phrase_hit_features
+            self.sme_features,
+            self.search_query_features
         ]
 
     def get_vector(self, uri):
@@ -106,10 +112,42 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         match2 = max([self.get_similarity(c, att_node) for c in conn2])
         return np.array([match1, match2])
 
+    def sme_features(self, example):
+        features = []
+        node1 = example.node1()
+        node2 = example.node2()
+        att = example.att_node()
+        if node1 in self.sme and node2 in self.sme and att in self.sme:
+            features.append(self.sme.predict_relations_forward(node1, att))
+            features.append(self.sme.predict_relations_backward(node1, att))
+            features.append(self.sme.predict_relations_forward(node2, att))
+            features.append(self.sme.predict_relations_backward(node2, att))
+            return np.hstack([series.data for series in features])
+        else:
+            return np.zeros(self.sme.num_rels() * 4)
+
     def phrase_hit_features(self, example):
-        phrase1 = '{} {}'.format(example.word1, example.attribute)
-        phrase2 = '{} {}'.format(example.word2, example.attribute)
-        return np.array([int(phrase1 in self.phrases), int(phrase2 in self.phrases)])
+        word1_phrases = self.phrases[example.word1]
+        word2_phrases = self.phrases[example.word2]
+        att_phrases = self.phrases[example.attribute]
+        int1 = set(word1_phrases).intersection(att_phrases)
+        int2 = set(word2_phrases).intersection(att_phrases)
+        if int1 and not int2:
+            return np.array([1])
+        else:
+            return np.array([0])
+
+    def search_query_features(self, example):
+        word1_queries = self.queries[example.word1]
+        word2_queries = self.queries[example.word2]
+        att_queries = self.queries[example.attribute]
+        int1 = set(word1_queries).intersection(att_queries)
+        int2 = set(word2_queries).intersection(att_queries)
+        difference = len(int1) - len(int2)
+        if difference > 0:
+            return [np.log(difference)]
+        else:
+            return [0]
 
     def extract_features(self, examples, mode='train'):
         subarrays = []
