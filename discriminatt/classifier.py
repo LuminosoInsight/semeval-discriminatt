@@ -170,7 +170,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return np.hstack(subarrays)
 
     def train(self, examples):
-        self.svm = SVC()
+        self.svm = SVC(gamma=0.12)
         inputs = self.extract_features(examples, mode='train')
         outputs = np.array([example.discriminative for example in examples])
         self.svm.fit(inputs, outputs)
