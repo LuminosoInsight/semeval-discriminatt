@@ -1,8 +1,8 @@
-import pkg_resources
 import os
+from collections import defaultdict
 
+import pkg_resources
 from attr import attrs, attrib
-import numpy as np
 from conceptnet5.nodes import concept_uri
 
 
@@ -79,9 +79,36 @@ def read_semeval_data(name):
 
 def read_phrases(name):
     """
-     TODO
+    Read bigrams from Google books ngrams.
     """
     filename = get_external_data_filename(name)
+    phrases_index = defaultdict(list)
     with open(filename, encoding='utf-8') as input_file:
-        data = set(line.split(',')[0].lower() for line in input_file)
-    return data
+        for i, line in enumerate(input_file):
+            words = line.split(',')[0].lower().split()
+            for word in words:
+                phrases_index[word].append(i)
+    return phrases_index
+
+def read_search_queries():
+    """
+    Read AOL Query Logs and construct an index mapping a word to each document in which it appeared.
+    """
+    queries_index = defaultdict(list)
+    offset = 0
+    for number in range(1, 11):
+        filename = get_external_data_filename('user-ct-test-collection-{0:02d}.txt'.format(number))
+        doc_number = 0
+        with open(filename, encoding='utf-8') as input_file:
+            for i, line in enumerate(input_file):
+                if i == 0: # skip the header line
+                    continue
+                query = line.split('\t')[1]
+                words = query.split()
+                if len(words) == 1:
+                    continue
+                for word in words:
+                    queries_index[word].append(i + offset)
+                doc_number = i
+            offset += doc_number
+    return queries_index
