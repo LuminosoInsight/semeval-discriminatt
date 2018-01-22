@@ -8,8 +8,8 @@ from tqdm import tqdm as progress_bar
 
 from discriminatt.data import read_semeval_data, get_external_data_filename, get_result_filename, read_phrases, \
     read_search_queries
-from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 from discriminatt.standalone_sme import StandaloneSMEModel
+from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
 
 
@@ -181,7 +181,6 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
         elif method.__name__ == 'wikipedia_relatedness_features' and not self.wp_db:
             self.wp_db = sqlite3.connect(get_external_data_filename('wikipedia-summary.db'))
-
 
     def train(self, examples):
         self.svm = SVC()
