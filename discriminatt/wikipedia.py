@@ -1,5 +1,3 @@
-import sqlite3
-from conceptnet5.language.english import LEMMATIZER
 from conceptnet5.nodes import standardized_concept_uri
 
 
