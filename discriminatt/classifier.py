@@ -100,6 +100,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return np.array([match1, match2])
 
     def wikipedia_relatedness_features(self, example):
+        if not self.wp_db:
+            self.wp_db = sqlite3.connect(get_external_data_filename('wikipedia-summary.db'))
         connected1 = [example.node1()] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word1)
         connected2 = [example.node2()] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word2)
         return self.max_relatedness_features(connected1, connected2, example.att_node())
@@ -115,6 +117,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return np.array([match1, match2])
 
     def sme_features(self, example):
+        if not self.sme:
+            self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
         features = []
         node1 = example.node1()
         node2 = example.node2()
@@ -129,6 +133,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             return np.zeros(self.sme.num_rels() * 4)
 
     def phrase_hit_features(self, example):
+        if not self.phrases:
+            self.phrases = read_phrases('google-books-2grams.txt')
         word1_phrases = self.phrases[example.word1]
         word2_phrases = self.phrases[example.word2]
         att_phrases = self.phrases[example.attribute]
@@ -140,6 +146,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             return np.array([0])
 
     def search_query_features(self, example):
+        if not self.queries:
+            self.queries = read_search_queries()
         word1_queries = self.queries[example.word1]
         word2_queries = self.queries[example.word2]
         att_queries = self.queries[example.attribute]
@@ -163,7 +171,6 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             if os.access(feature_filename, os.R_OK):
                 features = np.load(feature_filename)
             else:
-                self.load(method)
                 feature_list = []
                 for example in progress_bar(examples, desc=name):
                     feature_list.append(method(example))
@@ -171,16 +178,6 @@ class MultipleFeaturesClassifier(AttributeClassifier):
                 np.save(feature_filename, features)
             subarrays.append(features)
         return np.hstack(subarrays)
-
-    def load(self, method):
-        if method.__name__ == 'search_query_features' and not self.queries:
-            self.queries = read_search_queries()
-        elif method.__name__ == 'phrase_hit_features' and not self.phrases:
-            self.phrases = read_phrases('google-books-2grams.txt')
-        elif method.__name__ == 'sme_features' and not self.sme:
-            self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
-        elif method.__name__ == 'wikipedia_relatedness_features' and not self.wp_db:
-            self.wp_db = sqlite3.connect(get_external_data_filename('wikipedia-summary.db'))
 
     def train(self, examples):
         self.svm = SVC()
