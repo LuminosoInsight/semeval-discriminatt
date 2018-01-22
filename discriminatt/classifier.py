@@ -79,8 +79,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             self.wikipedia_relatedness_features,
             self.wordnet_relatedness_features,
             self.sme_features,
-            self.search_query_features,
-            self.phrase_hit_features
+            self.search_query_features
         ]
 
     def get_vector(self, uri):
