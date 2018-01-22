@@ -64,13 +64,14 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     directory. If you change the code of a feature, delete its corresponding cache
     files from that directory.
     """
-    def __init__(self, embeddings_filename, phrases_filename, wikipedia_filename):
-        self.wrap = VectorSpaceWrapper(get_external_data_filename(embeddings_filename), use_db=False)
+    def __init__(self):
+        self.wrap = VectorSpaceWrapper(get_external_data_filename('numberbatch-20180108-biased.h5'),
+                                       use_db=False)
         self.cache = {}
-        self.wp_db = sqlite3.connect(get_external_data_filename(wikipedia_filename))
-        self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
-        self.queries = read_search_queries()
-        self.phrases = read_phrases(phrases_filename)
+        self.wp_db = None
+        self.sme = None
+        self.queries = None
+        self.phrases = None
         self.svm = None
 
         self.feature_methods = [
@@ -78,7 +79,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             self.wikipedia_relatedness_features,
             self.wordnet_relatedness_features,
             self.sme_features,
-            self.search_query_features
+            self.search_query_features,
+            self.phrase_hit_features
         ]
 
     def get_vector(self, uri):
@@ -161,6 +163,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             if os.access(feature_filename, os.R_OK):
                 features = np.load(feature_filename)
             else:
+                self.load(method)
                 feature_list = []
                 for example in progress_bar(examples, desc=name):
                     feature_list.append(method(example))
@@ -168,6 +171,17 @@ class MultipleFeaturesClassifier(AttributeClassifier):
                 np.save(feature_filename, features)
             subarrays.append(features)
         return np.hstack(subarrays)
+
+    def load(self, method):
+        if method.__name__ == 'search_query_features' and not self.queries:
+            self.queries = read_search_queries()
+        elif method.__name__ == 'phrase_hit_features' and not self.phrases:
+            self.phrases = read_phrases('google-books-2grams.txt')
+        elif method.__name__ == 'sme_features' and not self.sme:
+            self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
+        elif method.__name__ == 'wikipedia_relatedness_features' and not self.wp_db:
+            self.wp_db = sqlite3.connect(get_external_data_filename('wikipedia-summary.db'))
+
 
     def train(self, examples):
         self.svm = SVC()
@@ -182,9 +196,5 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 
 
 if __name__ == '__main__':
-    multiple_features = MultipleFeaturesClassifier(
-        'numberbatch-20180108-biased.h5',
-        'google-books-2grams.txt',
-        'wikipedia-summary.db'
-    )
+    multiple_features = MultipleFeaturesClassifier()
     print(multiple_features.evaluate())
