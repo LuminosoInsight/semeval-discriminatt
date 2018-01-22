@@ -8,8 +8,8 @@ from tqdm import tqdm as progress_bar
 
 from discriminatt.data import read_semeval_data, get_external_data_filename, get_result_filename, read_phrases, \
     read_search_queries
-from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 from discriminatt.standalone_sme import StandaloneSMEModel
+from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
 
 
@@ -64,13 +64,14 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     directory. If you change the code of a feature, delete its corresponding cache
     files from that directory.
     """
-    def __init__(self, embeddings_filename, phrases_filename, wikipedia_filename):
-        self.wrap = VectorSpaceWrapper(get_external_data_filename(embeddings_filename), use_db=False)
+    def __init__(self):
+        self.wrap = VectorSpaceWrapper(get_external_data_filename('numberbatch-20180108-biased.h5'),
+                                       use_db=False)
         self.cache = {}
-        self.wp_db = sqlite3.connect(get_external_data_filename(wikipedia_filename))
-        self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
-        self.queries = read_search_queries()
-        self.phrases = read_phrases(phrases_filename)
+        self.wp_db = None
+        self.sme = None
+        self.queries = None
+        self.phrases = None
         self.svm = None
 
         self.feature_methods = [
@@ -78,7 +79,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             self.wikipedia_relatedness_features,
             self.wordnet_relatedness_features,
             self.sme_features,
-            self.search_query_features
+            self.search_query_features,
+            self.phrase_hit_features
         ]
 
     def get_vector(self, uri):
@@ -98,6 +100,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return np.array([match1, match2])
 
     def wikipedia_relatedness_features(self, example):
+        if self.wp_db is None:
+            self.wp_db = sqlite3.connect(get_external_data_filename('wikipedia-summary.db'))
         connected1 = [example.node1()] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word1)
         connected2 = [example.node2()] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word2)
         return self.max_relatedness_features(connected1, connected2, example.att_node())
@@ -113,6 +117,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return np.array([match1, match2])
 
     def sme_features(self, example):
+        if self.sme is None:
+            self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
         features = []
         node1 = example.node1()
         node2 = example.node2()
@@ -127,6 +133,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             return np.zeros(self.sme.num_rels() * 4)
 
     def phrase_hit_features(self, example):
+        if self.phrases is None:
+            self.phrases = read_phrases('google-books-2grams.txt')
         word1_phrases = self.phrases[example.word1]
         word2_phrases = self.phrases[example.word2]
         att_phrases = self.phrases[example.attribute]
@@ -138,6 +146,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             return np.array([0])
 
     def search_query_features(self, example):
+        if self.queries is None:
+            self.queries = read_search_queries()
         word1_queries = self.queries[example.word1]
         word2_queries = self.queries[example.word2]
         att_queries = self.queries[example.attribute]
@@ -182,9 +192,5 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 
 
 if __name__ == '__main__':
-    multiple_features = MultipleFeaturesClassifier(
-        'numberbatch-20180108-biased.h5',
-        'google-books-2grams.txt',
-        'wikipedia-summary.db'
-    )
+    multiple_features = MultipleFeaturesClassifier()
     print(multiple_features.evaluate())

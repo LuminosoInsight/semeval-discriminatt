@@ -1,7 +1,6 @@
-import nltk
-from nltk.corpus import wordnet
 from conceptnet5.language.english import LEMMATIZER
 from conceptnet5.nodes import standardized_concept_uri
+from nltk.corpus import wordnet
 from wordfreq.tokens import tokenize
 
 get_synset = wordnet._synset_from_pos_and_offset
