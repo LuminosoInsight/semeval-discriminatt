@@ -100,7 +100,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return np.array([match1, match2])
 
     def wikipedia_relatedness_features(self, example):
-        if not self.wp_db:
+        if self.wp_db is None:
             self.wp_db = sqlite3.connect(get_external_data_filename('wikipedia-summary.db'))
         connected1 = [example.node1()] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word1)
         connected2 = [example.node2()] + wikipedia_connected_conceptnet_nodes(self.wp_db, example.word2)
@@ -117,7 +117,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return np.array([match1, match2])
 
     def sme_features(self, example):
-        if not self.sme:
+        if self.sme is None:
             self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
         features = []
         node1 = example.node1()
@@ -133,7 +133,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             return np.zeros(self.sme.num_rels() * 4)
 
     def phrase_hit_features(self, example):
-        if not self.phrases:
+        if self.phrases is None:
             self.phrases = read_phrases('google-books-2grams.txt')
         word1_phrases = self.phrases[example.word1]
         word2_phrases = self.phrases[example.word2]
@@ -146,7 +146,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             return np.array([0])
 
     def search_query_features(self, example):
-        if not self.queries:
+        if self.queries is None:
             self.queries = read_search_queries()
         word1_queries = self.queries[example.word1]
         word2_queries = self.queries[example.word2]
