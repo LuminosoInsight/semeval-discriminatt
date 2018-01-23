@@ -3,7 +3,7 @@ from collections import defaultdict
 
 import pkg_resources
 from attr import attrs, attrib
-from conceptnet5.nodes import concept_uri
+from conceptnet5.nodes import standardized_concept_uri
 
 
 # Use attr (an upgrade to namedtuple) to make a class that represents an
@@ -21,15 +21,15 @@ class AttributeExample:
 
     def node1(self):
         "Get word1 as a ConceptNet URI."
-        return concept_uri('en', self.word1)
+        return standardized_concept_uri('en', self.word1)
 
     def node2(self):
         "Get word2 as a ConceptNet URI."
-        return concept_uri('en', self.word2)
+        return standardized_concept_uri('en', self.word2)
 
     def att_node(self):
         "Get the attribute as a ConceptNet URI."
-        return concept_uri('en', self.attribute)
+        return standardized_concept_uri('en', self.attribute)
 
 
 def get_semeval_data_filename(filename):
