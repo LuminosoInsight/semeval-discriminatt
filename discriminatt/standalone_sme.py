@@ -10,7 +10,6 @@ class StandaloneSMEModel:
         '/r/IsA',
         '/r/HasProperty',
         '/r/PartOf',
-        '/r/UsedFor',
     ]
     def __init__(self, dirname):
         """
@@ -45,7 +44,7 @@ class StandaloneSMEModel:
             'ijk,j,k->i',
             self.assoc_tensor, vec1, vec2
         )
-        rels = self.rel_embeddings.dot(rel_vec).loc[self.RELEVANT_RELATIONS]
+        rels = self.rel_embeddings.dot(rel_vec)
         return rels
 
     def predict_relations_backward(self, term1, term2):
@@ -60,8 +59,20 @@ class StandaloneSMEModel:
             'ijk,j,k->i',
             self.assoc_tensor, vec2, vec1
         )
-        rels = self.rel_embeddings.dot(rel_vec).loc[self.RELEVANT_RELATIONS]
+        rels = self.rel_embeddings.dot(rel_vec)
         return rels
+
+    def predict_discriminative_relations(self, term1, term2):
+        forward = self.predict_relations_forward(term1, term2)
+        backward = self.predict_relations_backward(term1, term2)
+        return np.array([
+            forward.loc['/r/RelatedTo'] + backward.loc['/r/RelatedTo'],
+            forward.loc['/r/IsA'],
+            forward.loc['/r/HasProperty'],
+            forward.loc['/r/HasA'],
+            backward.loc['/r/PartOf'],
+            backward.loc['/r/HasProperty']
+        ])
 
     def predict_terms_forward(self, rel, term):
         """
@@ -95,4 +106,4 @@ class StandaloneSMEModel:
         return term in self.term_embeddings.index
 
     def num_rels(self):
-        return len(self.RELEVANT_RELATIONS)
+        return 6

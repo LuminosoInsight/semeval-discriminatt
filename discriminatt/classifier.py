@@ -3,7 +3,8 @@ import sqlite3
 
 import numpy as np
 from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
+from sklearn.preprocessing import normalize
 from tqdm import tqdm as progress_bar
 
 from discriminatt.data import read_semeval_data, get_external_data_filename, get_result_filename, read_phrases, \
@@ -97,7 +98,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     def direct_relatedness_features(self, example):
         match1 = self.get_similarity(example.node1(), example.att_node())
         match2 = self.get_similarity(example.node2(), example.att_node())
-        return np.array([match1, match2])
+        return np.array([match1 - match2])
 
     def wikipedia_relatedness_features(self, example):
         if self.wp_db is None:
@@ -114,7 +115,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     def max_relatedness_features(self, conn1, conn2, att_node):
         match1 = max([self.get_similarity(c, att_node) for c in conn1])
         match2 = max([self.get_similarity(c, att_node) for c in conn2])
-        return np.array([match1, match2])
+        return np.array([match1 - match2])
 
     def sme_features(self, example):
         if self.sme is None:
@@ -124,13 +125,9 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         node2 = example.node2()
         att = example.att_node()
         if node1 in self.sme and node2 in self.sme and att in self.sme:
-            features.append(self.sme.predict_relations_forward(node1, att))
-            features.append(self.sme.predict_relations_backward(node1, att))
-            features.append(self.sme.predict_relations_forward(node2, att))
-            features.append(self.sme.predict_relations_backward(node2, att))
-            return np.hstack([series.data for series in features])
+            return self.sme.predict_discriminative_relations(node1, att) - self.sme.predict_discriminative_relations(node2, att)
         else:
-            return np.zeros(self.sme.num_rels() * 4)
+            return np.zeros(self.sme.num_rels())
 
     def phrase_hit_features(self, example):
         if self.phrases is None:
@@ -180,13 +177,14 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return np.hstack(subarrays)
 
     def train(self, examples):
-        self.svm = SVC(gamma=0.12)
-        inputs = self.extract_features(examples, mode='train')
+        self.svm = LinearSVC()
+        inputs = normalize(self.extract_features(examples, mode='train'), axis=0, norm='l2')
         outputs = np.array([example.discriminative for example in examples])
         self.svm.fit(inputs, outputs)
+        print(self.svm.coef_)
 
     def classify(self, examples):
-        inputs = self.extract_features(examples, mode='test')
+        inputs = normalize(self.extract_features(examples, mode='test'), axis=0, norm='l2')
         predictions = self.svm.predict(inputs)
         return predictions
 
