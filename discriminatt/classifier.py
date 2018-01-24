@@ -96,8 +96,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         return self.get_vector(uri1).dot(self.get_vector(uri2))
 
     def direct_relatedness_features(self, example):
-        match1 = self.get_similarity(example.node1(), example.att_node())
-        match2 = self.get_similarity(example.node2(), example.att_node())
+        match1 = max(self.get_similarity(example.node1(), example.att_node()), 0) ** 0.5
+        match2 = max(self.get_similarity(example.node2(), example.att_node()), 0) ** 0.5
         return np.array([match1 - match2])
 
     def wikipedia_relatedness_features(self, example):
