@@ -5,12 +5,6 @@ from conceptnet5.vectors.formats import load_hdf
 
 
 class StandaloneSMEModel:
-    RELEVANT_RELATIONS = [
-        '/r/RelatedTo',
-        '/r/IsA',
-        '/r/HasProperty',
-        '/r/PartOf',
-    ]
     def __init__(self, dirname):
         """
         Load the files exported from a model trained with ConceptNet's
