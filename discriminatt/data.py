@@ -3,6 +3,7 @@ from collections import defaultdict
 
 import pkg_resources
 from attr import attrs, attrib
+from conceptnet5.language.english import LEMMATIZER
 from conceptnet5.nodes import standardized_concept_uri
 
 
@@ -30,6 +31,15 @@ class AttributeExample:
     def att_node(self):
         "Get the attribute as a ConceptNet URI."
         return standardized_concept_uri('en', self.attribute)
+
+    def lemma1(self):
+        return LEMMATIZER.lookup('en', self.word1)[0]
+
+    def lemma2(self):
+        return LEMMATIZER.lookup('en', self.word2)[0]
+
+    def lemma_att(self):
+        return LEMMATIZER.lookup('en', self.attribute)[0]
 
 
 def get_semeval_data_filename(filename):
@@ -76,19 +86,6 @@ def read_semeval_data(name):
         examples.append(AttributeExample(word1, word2, attribute, discriminative))
     return examples
 
-
-def read_phrases(name):
-    """
-    Read bigrams from Google books ngrams.
-    """
-    filename = get_external_data_filename(name)
-    phrases_index = defaultdict(list)
-    with open(filename, encoding='utf-8') as input_file:
-        for i, line in enumerate(input_file):
-            words = line.split(',')[0].lower().split()
-            for word in words:
-                phrases_index[word].append(i)
-    return phrases_index
 
 def read_search_queries():
     """
