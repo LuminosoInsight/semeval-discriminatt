@@ -1,5 +1,8 @@
 import sqlite3
+
+from conceptnet5.language.english import LEMMATIZER
 from tqdm import tqdm
+
 from discriminatt.data import get_external_data_filename
 
 SCHEMA = [
@@ -8,12 +11,16 @@ SCHEMA = [
         phrase TEXT,
         first_word TEXT,
         second_word TEXT,
-        count INTEGER
+        count INTEGER,
+        first_lemma TEXT,
+        second_lemma TEXT
     )
     """,
     "CREATE INDEX phrases_first_word ON phrases (first_word)",
     "CREATE INDEX phrases_second_word ON phrases (second_word)",
-    "CREATE INDEX phrases_count ON phrases (count)"
+    "CREATE INDEX phrases_count ON phrases (count)",
+    "CREATE INDEX phrases_first_lemma ON phrases (first_lemma)",
+    "CREATE INDEX phrases_second_lemma ON phrases (second_lemma)"
 ]
 
 
@@ -33,9 +40,13 @@ def build_phrases_database(db, filename):
 
 
 def add_entry(db, phrase, first_word, second_word, count):
-        db.execute(
-            "INSERT OR IGNORE INTO phrases (phrase, first_word, second_word, count) VALUES (?, ?, ?, ?)",
-            (phrase, first_word, second_word, count)
+    first_lemma = LEMMATIZER.lookup('en', first_word)[0]
+    second_lemma = LEMMATIZER.lookup('en', second_word)[0]
+
+    db.execute(
+            "INSERT OR IGNORE INTO phrases (phrase, first_word, second_word, count, "
+            "first_lemma, second_lemma) VALUES (?, ?, ?, ?, ?, ?)",
+            (phrase, first_word, second_word, count, first_lemma, second_lemma)
         )
 
 if __name__ == '__main__':
