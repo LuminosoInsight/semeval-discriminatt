@@ -7,11 +7,12 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.preprocessing import normalize
 from tqdm import tqdm as progress_bar
 
-from discriminatt.data import read_semeval_data, get_external_data_filename, get_result_filename, read_phrases, \
+from discriminatt.data import read_semeval_data, get_external_data_filename, get_result_filename, \
     read_search_queries
 from discriminatt.standalone_sme import StandaloneSMEModel
 from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
+from discriminatt.phrases import count_for_phrases
 
 
 class AttributeClassifier:
@@ -131,16 +132,14 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 
     def phrase_hit_features(self, example):
         if self.phrases is None:
-            self.phrases = read_phrases('google-books-2grams.txt')
-        word1_phrases = self.phrases[example.word1]
-        word2_phrases = self.phrases[example.word2]
-        att_phrases = self.phrases[example.attribute]
-        int1 = set(word1_phrases).intersection(att_phrases)
-        int2 = set(word2_phrases).intersection(att_phrases)
-        if int1 and not int2:
-            return np.array([1])
+            self.phrases = sqlite3.connect(get_external_data_filename('phrases.db'))
+
+        count_pair1 = count_for_phrases(self.phrases, example.word1, example.attribute)
+        count_pair2 = count_for_phrases(self.phrases, example.word2, example.attribute)
+        if count_pair1 and not count_pair2:
+            return 1
         else:
-            return np.array([0])
+            return 0
 
     def search_query_features(self, example):
         if self.queries is None:

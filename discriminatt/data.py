@@ -77,18 +77,21 @@ def read_semeval_data(name):
     return examples
 
 
-def read_phrases(name):
-    """
-    Read bigrams from Google books ngrams.
-    """
-    filename = get_external_data_filename(name)
-    phrases_index = defaultdict(list)
-    with open(filename, encoding='utf-8') as input_file:
-        for i, line in enumerate(input_file):
-            words = line.split(',')[0].lower().split()
-            for word in words:
-                phrases_index[word].append(i)
-    return phrases_index
+# def read_phrases(name):
+#     """
+#     Read bigrams from Google books ngrams.
+#     """
+#     filename = get_external_data_filename(name)
+#     phrases_index = defaultdict(list)
+#     with open(filename, encoding='utf-8') as input_file:
+#         for i, line in enumerate(input_file):
+#             words, count = line.lower().split(',')
+#             words = words.split()
+#             count = int(count)
+#             # words = line.split(',')[0].lower().split()
+#             for word in words:
+#                 phrases_index[word].append(i)
+#     return phrases_index
 
 def read_search_queries():
     """
