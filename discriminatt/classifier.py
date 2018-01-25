@@ -81,7 +81,6 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             self.wikipedia_relatedness_features,
             self.wordnet_relatedness_features,
             self.sme_features,
-            self.search_query_features,
             self.phrase_hit_features
         ]
 
@@ -120,7 +119,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 
     def sme_features(self, example):
         if self.sme is None:
-            self.sme = StandaloneSMEModel(get_external_data_filename('sme-20171220'))
+            self.sme = StandaloneSMEModel(get_external_data_filename('sme-20180125'))
         features = []
         node1 = example.node1()
         node2 = example.node2()
