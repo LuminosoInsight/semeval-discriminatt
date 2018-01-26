@@ -20,9 +20,9 @@ def word_count(db, lemma_word):
 
 
 def phrase_weight(db, lemma_word, lemma_attribute):
-    return 12 + math.log10(
+    return 10 + math.log10(
         (phrase_count(db, lemma_word, lemma_attribute) + 1) /
-        (word_count(db, lemma_word) + 1e6) /
-        (word_count(db, lemma_attribute) + 1e6)
+        (word_count(db, lemma_word) + 100000) /
+        (word_count(db, lemma_attribute) + 100000)
     )
 
