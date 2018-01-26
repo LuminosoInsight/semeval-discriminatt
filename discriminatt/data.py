@@ -87,6 +87,21 @@ def read_semeval_data(name):
     return examples
 
 
+def read_semeval_blind_data(name):
+    """
+    Read the list of examples from the test file, which does not contain the
+    correct answers.
+
+    Example: read_semeval_data('test/test_triples.txt')
+    """
+    filename = get_semeval_data_filename(name)
+    examples = []
+    for line in open(filename, encoding='utf-8'):
+        word1, word2, attribute = line.rstrip().split(',')
+        examples.append(AttributeExample(word1, word2, attribute, None))
+    return examples
+
+
 def read_search_queries():
     """
     Read AOL Query Logs and construct an index mapping a word to each document in which it appeared.
