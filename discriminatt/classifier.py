@@ -9,7 +9,7 @@ from tqdm import tqdm as progress_bar
 
 from discriminatt.data import read_semeval_data, get_external_data_filename, get_result_filename, \
     read_search_queries
-from discriminatt.phrases import phrase_count
+from discriminatt.phrases import phrase_weight
 from discriminatt.standalone_sme import StandaloneSMEModel
 from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
@@ -132,8 +132,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     def phrase_hit_features(self, example):
         if self.phrases is None:
             self.phrases = sqlite3.connect(get_external_data_filename('phrases.db'))
-        count_pair1 = phrase_count(self.phrases, example.lemma1(), example.lemma_att())
-        count_pair2 = phrase_count(self.phrases, example.lemma2(), example.lemma_att())
+        count_pair1 = phrase_weight(self.phrases, example.lemma1(), example.lemma_att())
+        count_pair2 = phrase_weight(self.phrases, example.lemma2(), example.lemma_att())
         if count_pair1 and not count_pair2:
             return 1
         else:
