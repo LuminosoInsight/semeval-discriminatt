@@ -132,12 +132,9 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     def phrase_hit_features(self, example):
         if self.phrases is None:
             self.phrases = sqlite3.connect(get_external_data_filename('phrases.db'))
-        count_pair1 = phrase_weight(self.phrases, example.lemma1(), example.lemma_att())
-        count_pair2 = phrase_weight(self.phrases, example.lemma2(), example.lemma_att())
-        if count_pair1 and not count_pair2:
-            return 1
-        else:
-            return 0
+        weight_pair1 = phrase_weight(self.phrases, example.lemma1(), example.lemma_att())
+        weight_pair2 = phrase_weight(self.phrases, example.lemma2(), example.lemma_att())
+        return weight_pair1 - weight_pair2
 
     def search_query_features(self, example):
         if self.queries is None:

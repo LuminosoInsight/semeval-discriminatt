@@ -1,3 +1,6 @@
+import math
+
+
 def phrase_count(db, lemma_word, lemma_attribute):
     c = db.cursor()
     c.execute("SELECT count FROM phrases WHERE (first_lemma=? AND second_lemma=?) OR (first_lemma=? "
@@ -17,9 +20,9 @@ def word_count(db, lemma_word):
 
 
 def phrase_weight(db, lemma_word, lemma_attribute):
-    return (
+    return 12 + math.log10(
         (phrase_count(db, lemma_word, lemma_attribute) + 1) /
-        (word_count(db, lemma_word) + 1) /
-        (word_count(db, lemma_attribute) + 1)
+        (word_count(db, lemma_word) + 1e6) /
+        (word_count(db, lemma_attribute) + 1e6)
     )
 
