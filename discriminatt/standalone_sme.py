@@ -62,10 +62,15 @@ class StandaloneSMEModel:
         return np.array([
             forward.loc['/r/RelatedTo'] + backward.loc['/r/RelatedTo'],
             forward.loc['/r/IsA'],
-            forward.loc['/r/HasProperty'],
             forward.loc['/r/HasA'],
+            forward.loc['/r/PartOf'],
+            forward.loc['/r/CapableOf'],
+            forward.loc['/r/UsedFor'],
+            forward.loc['/r/HasContext'],
+            forward.loc['/r/HasProperty'],
+            forward.loc['/r/AtLocation'],
             backward.loc['/r/PartOf'],
-            backward.loc['/r/HasProperty']
+            backward.loc['/r/AtLocation'],
         ])
 
     def predict_terms_forward(self, rel, term):
@@ -100,4 +105,4 @@ class StandaloneSMEModel:
         return term in self.term_embeddings.index
 
     def num_rels(self):
-        return 6
+        return 11
