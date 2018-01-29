@@ -133,7 +133,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 
     def sme_features(self, example):
         if self.sme is None:
-            self.sme = StandaloneSMEModel(get_external_data_filename('sme-20180125'))
+            self.sme = StandaloneSMEModel(get_external_data_filename('sme-20180129'))
         features = []
         node1 = example.node1()
         node2 = example.node2()
@@ -189,6 +189,11 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         inputs = normalize(self.extract_features(examples, mode='train'), axis=0, norm='l2')
         outputs = np.array([example.discriminative for example in examples])
         self.svm.fit(inputs, outputs)
+
+        # Zero out features that get a negative weight -- these features were
+        # intended to be positive, so one that comes out negative is probably
+        # overfitting
+        self.svm.coef_ = np.maximum(0, self.svm.coef_)
         print(self.svm.coef_)
 
     def classify(self, examples):
