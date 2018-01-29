@@ -17,6 +17,9 @@ from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
 
 
+np.random.seed(0)
+
+
 class AttributeClassifier:
     """
     Subclasses of this class are strategies for solving the task.
