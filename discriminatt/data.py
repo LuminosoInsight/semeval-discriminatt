@@ -87,7 +87,7 @@ def read_semeval_data(name):
     return examples
 
 
-def read_semeval_blind_data(name):
+def read_blind_semeval_data(name):
     """
     Read the list of examples from the test file, which does not contain the
     correct answers.
