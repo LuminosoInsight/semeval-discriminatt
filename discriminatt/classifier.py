@@ -7,9 +7,11 @@ from sklearn.preprocessing import normalize
 from sklearn.svm import LinearSVC
 from tqdm import tqdm as progress_bar
 
-from discriminatt.data import read_semeval_data, get_external_data_filename, get_result_filename, \
-    read_search_queries
-from discriminatt.phrases import phrase_count
+from discriminatt.data import (
+    read_semeval_data, read_blind_semeval_data,
+    get_external_data_filename, get_result_filename, read_search_queries
+)
+from discriminatt.phrases import phrase_weight
 from discriminatt.standalone_sme import StandaloneSMEModel
 from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
@@ -54,6 +56,18 @@ class AttributeClassifier:
         real_answers = np.array([example.discriminative for example in test_examples])
         acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
         return acc
+
+    def run_test(self):
+        test_examples = read_blind_semeval_data('test/test_triples.txt')
+        output = open(get_result_filename('answer.txt'), 'w')
+        our_answers = np.array(self.classify(test_examples))
+        for example, answer in zip(test_examples, our_answers):
+            print(
+                "{},{},{},{}".format(
+                    example.word1, example.word2, example.attribute, int(answer)
+                ),
+                file=output
+            )
 
 
 class MultipleFeaturesClassifier(AttributeClassifier):
@@ -132,12 +146,9 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     def phrase_hit_features(self, example):
         if self.phrases is None:
             self.phrases = sqlite3.connect(get_external_data_filename('phrases.db'))
-        count_pair1 = phrase_count(self.phrases, example.lemma1(), example.lemma_att())
-        count_pair2 = phrase_count(self.phrases, example.lemma2(), example.lemma_att())
-        if count_pair1 and not count_pair2:
-            return 1
-        else:
-            return 0
+        weight_pair1 = phrase_weight(self.phrases, example.lemma1(), example.lemma_att())
+        weight_pair2 = phrase_weight(self.phrases, example.lemma2(), example.lemma_att())
+        return weight_pair1 - weight_pair2
 
     def search_query_features(self, example):
         if self.queries is None:
@@ -189,3 +200,4 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 if __name__ == '__main__':
     multiple_features = MultipleFeaturesClassifier()
     print(multiple_features.evaluate())
+    multiple_features.run_test()

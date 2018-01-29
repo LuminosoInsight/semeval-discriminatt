@@ -1,3 +1,5 @@
+import math
+
 
 def phrase_count(db, lemma_word, lemma_attribute):
     c = db.cursor()
@@ -5,3 +7,22 @@ def phrase_count(db, lemma_word, lemma_attribute):
               "AND second_lemma=?)", (lemma_word, lemma_attribute, lemma_attribute, lemma_word))
     results = c.fetchall()
     return sum([result[0] for result in results])
+
+
+def word_count(db, lemma_word):
+    c = db.cursor()
+    c.execute(
+        "SELECT count FROM words WHERE lemma=?",
+        (lemma_word,)
+    )
+    results = c.fetchall()
+    return sum([result[0] for result in results])
+
+
+def phrase_weight(db, lemma_word, lemma_attribute):
+    return 10 + math.log10(
+        (phrase_count(db, lemma_word, lemma_attribute) + 1) /
+        (word_count(db, lemma_word) + 100000) /
+        (word_count(db, lemma_attribute) + 100000)
+    )
+
