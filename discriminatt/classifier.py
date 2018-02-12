@@ -176,7 +176,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
                 os.mkdir(os.path.dirname(feature_filename))
             except FileExistsError:
                 pass
-            if os.access(feature_filename, os.R_OK):
+            if os.access(feature_filename, os.R_OK) and mode == 'train':
                 features = np.load(feature_filename)
             else:
                 feature_list = []
