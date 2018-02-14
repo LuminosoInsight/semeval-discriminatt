@@ -54,16 +54,22 @@ class AttributeClassifier:
 
         print("Training")
         self.train(training_examples)
+        our_answers = np.array(self.classify(training_examples, 'train'))
+        real_answers = np.array([example.discriminative for example in training_examples])
+        training_acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
+        print("Training accuracy: %3.3f%%" % (training_acc * 100))
+
         print("Testing")
-        our_answers = np.array(self.classify(test_examples))
+        our_answers = np.array(self.classify(test_examples, 'validation'))
         real_answers = np.array([example.discriminative for example in test_examples])
         acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
+        print("Validation accuracy: %3.3f%%" % (acc * 100))
         return acc
 
     def run_test(self):
         test_examples = read_blind_semeval_data('test/test_triples.txt')
         output = open(get_result_filename('answer.txt'), 'w')
-        our_answers = np.array(self.classify(test_examples))
+        our_answers = np.array(self.classify(test_examples, 'test'))
         for example, answer in zip(test_examples, our_answers):
             print(
                 "{},{},{},{}".format(
@@ -176,7 +182,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
                 os.mkdir(os.path.dirname(feature_filename))
             except FileExistsError:
                 pass
-            if os.access(feature_filename, os.R_OK) and mode == 'train':
+            if os.access(feature_filename, os.R_OK):
                 features = np.load(feature_filename)
             else:
                 feature_list = []
@@ -199,8 +205,8 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         self.svm.coef_ = np.maximum(0, self.svm.coef_)
         print(self.svm.coef_)
 
-    def classify(self, examples):
-        inputs = normalize(self.extract_features(examples, mode='test'), axis=0, norm='l2')
+    def classify(self, examples, mode):
+        inputs = normalize(self.extract_features(examples, mode=mode), axis=0, norm='l2')
         predictions = self.svm.predict(inputs)
         return predictions
 
