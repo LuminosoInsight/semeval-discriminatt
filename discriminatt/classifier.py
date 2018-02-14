@@ -2,6 +2,7 @@ import os
 import sqlite3
 
 import numpy as np
+import pandas as pd
 from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
 from sklearn.preprocessing import normalize
 from sklearn.svm import LinearSVC
@@ -57,13 +58,14 @@ class AttributeClassifier:
         our_answers = np.array(self.classify(training_examples, 'train'))
         real_answers = np.array([example.discriminative for example in training_examples])
         training_acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
-        print("Training accuracy: %3.3f%%" % (training_acc * 100))
+        print("Training accuracy: %3.2f%%" % (training_acc * 100))
 
         print("Testing")
         our_answers = np.array(self.classify(test_examples, 'validation'))
         real_answers = np.array([example.discriminative for example in test_examples])
         acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
-        print("Validation accuracy: %3.3f%%" % (acc * 100))
+        acc_error = ((acc * (1 - acc)) / len(real_answers)) ** 0.5
+        print("Validation accuracy: %3.2f%% +/- %3.2f%%" % (acc * 100, acc_error * 100))
         return acc
 
     def run_test(self):
@@ -89,7 +91,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     directory. If you change the code of a feature, delete its corresponding cache
     files from that directory.
     """
-    def __init__(self):
+    def __init__(self, ablate=()):
         self.wrap = VectorSpaceWrapper(get_external_data_filename('numberbatch-20180108-biased.h5'),
                                        use_db=False)
         self.cache = {}
@@ -98,13 +100,32 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         self.queries = None
         self.phrases = None
         self.svm = None
+        self.ablate = ablate
 
         self.feature_methods = [
             self.direct_relatedness_features,
             self.wikipedia_relatedness_features,
             self.wordnet_relatedness_features,
-            self.sme_features,
-            self.phrase_hit_features
+            self.phrase_hit_features,
+            self.sme_features
+        ]
+
+        self.feature_names = [
+            'ConceptNet vector relatedness',
+            'Wikipedia lead sections',
+            'WordNet relatedness',
+            'Google Ngrams',
+            'SME: RelatedTo',
+            'SME: (x IsA a)',
+            'SME: (x HasA a)',
+            'SME: (x PartOf a)',
+            'SME: (x CapableOf a)',
+            'SME: (x UsedFor a)',
+            'SME: (x HasContext a)',
+            'SME: (x HasProperty a)',
+            'SME: (x AtLocation a)',
+            'SME: (a PartOf x)',
+            'SME: (a AtLocation x)',
         ]
 
     def get_vector(self, uri):
@@ -175,7 +196,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 
     def extract_features(self, examples, mode='train'):
         subarrays = []
-        for method in self.feature_methods:
+        for i, method in enumerate(self.feature_methods):
             name = method.__name__
             feature_filename = get_result_filename('{}.{}.npy'.format(name, mode))
             try:
@@ -190,6 +211,10 @@ class MultipleFeaturesClassifier(AttributeClassifier):
                     feature_list.append(method(example))
                 features = np.vstack(feature_list)
                 np.save(feature_filename, features)
+
+            # Set a selected feature source to all zeroes
+            if i in self.ablate:
+                features *= 0
             subarrays.append(features)
         return np.hstack(subarrays)
 
@@ -203,7 +228,16 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         # intended to be positive, so one that comes out negative is probably
         # overfitting
         self.svm.coef_ = np.maximum(0, self.svm.coef_)
-        print(self.svm.coef_)
+        coef_series = pd.Series(self.svm.coef_[0], index=self.feature_names)
+        if self.ablate:
+            used_feature_names = [
+                self.feature_methods[a].__name__
+                for a in range(5)
+                if a not in self.ablate
+            ]
+            print("Used [{}]".format(', '.join(used_feature_names)))
+        else:
+            print(coef_series)
 
     def classify(self, examples, mode):
         inputs = normalize(self.extract_features(examples, mode=mode), axis=0, norm='l2')
@@ -215,3 +249,8 @@ if __name__ == '__main__':
     multiple_features = MultipleFeaturesClassifier()
     print(multiple_features.evaluate())
     multiple_features.run_test()
+
+    for ablation in ([0], [1], [2], [3], [4], [0, 4], [1, 2, 3], [1, 2, 3, 4], [0, 2, 3, 4], [0, 1, 3, 4], [0, 1, 2, 4], [0, 1, 2, 3]):
+        ablated = MultipleFeaturesClassifier(ablation)
+        print(ablated.evaluate())
+
