@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -46,27 +47,32 @@ class AttributeClassifier:
         """
         raise NotImplementedError
 
+    def show_acc(self, our_answers, real_answers, mode):
+        acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
+        acc_error = ((acc * (1 - acc)) / len(real_answers)) ** 0.5
+        print("{} accuracy: {:.2%} ± {:.2%}".format(mode, acc, acc_error))
+        return acc
+
     def evaluate(self):
         """
         Train this learning strategy, and evaluate its accuracy on the validation set.
         """
-        training_examples = read_semeval_data('training/train.txt')
-        test_examples = read_semeval_data('training/validation.txt')
+        examples = {
+            'train': read_semeval_data('training/train.txt'),
+            'validation': read_semeval_data('training/validation.txt'),
+            'test': read_semeval_data('test/truth.txt')
+        }
 
-        print("Training")
-        self.train(training_examples)
-        our_answers = np.array(self.classify(training_examples, 'train'))
-        real_answers = np.array([example.discriminative for example in training_examples])
-        training_acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
-        print("Training accuracy: %3.2f%%" % (training_acc * 100))
-
-        print("Testing")
-        our_answers = np.array(self.classify(test_examples, 'validation'))
-        real_answers = np.array([example.discriminative for example in test_examples])
-        acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
-        acc_error = ((acc * (1 - acc)) / len(real_answers)) ** 0.5
-        print("Validation accuracy: %3.2f%% +/- %3.2f%%" % (acc * 100, acc_error * 100))
-        return acc
+        self.train(examples['train'])
+        accuracies = {}
+        for mode in ['train', 'validation', 'test']:
+            this_acc = self.show_acc(
+                self.classify(examples[mode], mode),
+                [example.discriminative for example in examples[mode]],
+                mode
+            )
+            accuracies[mode] = this_acc
+        return accuracies
 
     def run_test(self):
         test_examples = read_blind_semeval_data('test/test_triples.txt')
@@ -104,17 +110,14 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 
         self.feature_methods = [
             self.direct_relatedness_features,
+            self.sme_features,
             self.wikipedia_relatedness_features,
             self.wordnet_relatedness_features,
-            self.phrase_hit_features,
-            self.sme_features
+            self.phrase_hit_features
         ]
 
         self.feature_names = [
             'ConceptNet vector relatedness',
-            'Wikipedia lead sections',
-            'WordNet relatedness',
-            'Google Ngrams',
             'SME: RelatedTo',
             'SME: (x IsA a)',
             'SME: (x HasA a)',
@@ -126,6 +129,9 @@ class MultipleFeaturesClassifier(AttributeClassifier):
             'SME: (x AtLocation a)',
             'SME: (a PartOf x)',
             'SME: (a AtLocation x)',
+            'Wikipedia lead sections',
+            'WordNet relatedness',
+            'Google Ngrams',
         ]
 
     def get_vector(self, uri):
@@ -250,7 +256,27 @@ if __name__ == '__main__':
     print(multiple_features.evaluate())
     multiple_features.run_test()
 
-    for ablation in ([0], [1], [2], [3], [4], [0, 4], [1, 2, 3], [1, 2, 3, 4], [0, 2, 3, 4], [0, 1, 3, 4], [0, 1, 2, 4], [0, 1, 2, 3]):
-        ablated = MultipleFeaturesClassifier(ablation)
-        print(ablated.evaluate())
+    labels = []
+    valid_accs = []
+    test_accs = []
+
+    for n_drop in range(5):
+        for ablation in itertools.combinations(range(5), r=n_drop):
+            short_id = ''.join(ch for ch in 'ABCDE' if (ord(ch) - ord('A')) not in ablation)
+            print()
+            print(short_id)
+            ablated = MultipleFeaturesClassifier(ablation)
+            accuracies = ablated.evaluate()
+
+            labels.append(short_id)
+            valid_accs.append(accuracies['validation'])
+            test_accs.append(accuracies['test'])
+
+    labels.reverse()
+    valid_accs.reverse()
+    test_accs.reverse()
+
+    print("labels = {}".format(labels))
+    print("valid_accs = {}".format(valid_accs))
+    print("test_accs = {}".format(test_accs))
 
