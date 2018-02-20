@@ -1,7 +1,9 @@
 import os
 import sqlite3
+import itertools
 
 import numpy as np
+import pandas as pd
 from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
 from sklearn.preprocessing import normalize
 from sklearn.svm import LinearSVC
@@ -45,25 +47,37 @@ class AttributeClassifier:
         """
         raise NotImplementedError
 
+    def show_acc(self, our_answers, real_answers, mode):
+        acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
+        acc_error = ((acc * (1 - acc)) / len(real_answers)) ** 0.5
+        print("{} accuracy: {:.2%} ± {:.2%}".format(mode, acc, acc_error))
+        return acc
+
     def evaluate(self):
         """
         Train this learning strategy, and evaluate its accuracy on the validation set.
         """
-        training_examples = read_semeval_data('training/train.txt')
-        test_examples = read_semeval_data('training/validation.txt')
+        examples = {
+            'train': read_semeval_data('training/train.txt'),
+            'validation': read_semeval_data('training/validation.txt'),
+            'test': read_semeval_data('test/truth.txt')
+        }
 
-        print("Training")
-        self.train(training_examples)
-        print("Testing")
-        our_answers = np.array(self.classify(test_examples))
-        real_answers = np.array([example.discriminative for example in test_examples])
-        acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
-        return acc
+        self.train(examples['train'])
+        accuracies = {}
+        for mode in ['train', 'validation', 'test']:
+            this_acc = self.show_acc(
+                self.classify(examples[mode], mode),
+                [example.discriminative for example in examples[mode]],
+                mode
+            )
+            accuracies[mode] = this_acc
+        return accuracies
 
     def run_test(self):
         test_examples = read_blind_semeval_data('test/test_triples.txt')
         output = open(get_result_filename('answer.txt'), 'w')
-        our_answers = np.array(self.classify(test_examples))
+        our_answers = np.array(self.classify(test_examples, 'test'))
         for example, answer in zip(test_examples, our_answers):
             print(
                 "{},{},{},{}".format(
@@ -83,7 +97,7 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     directory. If you change the code of a feature, delete its corresponding cache
     files from that directory.
     """
-    def __init__(self):
+    def __init__(self, ablate=()):
         self.wrap = VectorSpaceWrapper(get_external_data_filename('numberbatch-20180108-biased.h5'),
                                        use_db=False)
         self.cache = {}
@@ -92,13 +106,32 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         self.queries = None
         self.phrases = None
         self.svm = None
+        self.ablate = ablate
 
         self.feature_methods = [
             self.direct_relatedness_features,
+            self.sme_features,
             self.wikipedia_relatedness_features,
             self.wordnet_relatedness_features,
-            self.sme_features,
             self.phrase_hit_features
+        ]
+
+        self.feature_names = [
+            'ConceptNet vector relatedness',
+            'SME: RelatedTo',
+            'SME: (x IsA a)',
+            'SME: (x HasA a)',
+            'SME: (x PartOf a)',
+            'SME: (x CapableOf a)',
+            'SME: (x UsedFor a)',
+            'SME: (x HasContext a)',
+            'SME: (x HasProperty a)',
+            'SME: (x AtLocation a)',
+            'SME: (a PartOf x)',
+            'SME: (a AtLocation x)',
+            'Wikipedia lead sections',
+            'WordNet relatedness',
+            'Google Ngrams',
         ]
 
     def get_vector(self, uri):
@@ -169,14 +202,14 @@ class MultipleFeaturesClassifier(AttributeClassifier):
 
     def extract_features(self, examples, mode='train'):
         subarrays = []
-        for method in self.feature_methods:
+        for i, method in enumerate(self.feature_methods):
             name = method.__name__
             feature_filename = get_result_filename('{}.{}.npy'.format(name, mode))
             try:
                 os.mkdir(os.path.dirname(feature_filename))
             except FileExistsError:
                 pass
-            if os.access(feature_filename, os.R_OK) and mode == 'train':
+            if os.access(feature_filename, os.R_OK):
                 features = np.load(feature_filename)
             else:
                 feature_list = []
@@ -184,6 +217,10 @@ class MultipleFeaturesClassifier(AttributeClassifier):
                     feature_list.append(method(example))
                 features = np.vstack(feature_list)
                 np.save(feature_filename, features)
+
+            # Set a selected feature source to all zeroes
+            if i in self.ablate:
+                features *= 0
             subarrays.append(features)
         return np.hstack(subarrays)
 
@@ -197,10 +234,19 @@ class MultipleFeaturesClassifier(AttributeClassifier):
         # intended to be positive, so one that comes out negative is probably
         # overfitting
         self.svm.coef_ = np.maximum(0, self.svm.coef_)
-        print(self.svm.coef_)
+        coef_series = pd.Series(self.svm.coef_[0], index=self.feature_names)
+        if self.ablate:
+            used_feature_names = [
+                self.feature_methods[a].__name__
+                for a in range(5)
+                if a not in self.ablate
+            ]
+            print("Used [{}]".format(', '.join(used_feature_names)))
+        else:
+            print(coef_series)
 
-    def classify(self, examples):
-        inputs = normalize(self.extract_features(examples, mode='test'), axis=0, norm='l2')
+    def classify(self, examples, mode):
+        inputs = normalize(self.extract_features(examples, mode=mode), axis=0, norm='l2')
         predictions = self.svm.predict(inputs)
         return predictions
 
@@ -209,3 +255,28 @@ if __name__ == '__main__':
     multiple_features = MultipleFeaturesClassifier()
     print(multiple_features.evaluate())
     multiple_features.run_test()
+
+    labels = []
+    valid_accs = []
+    test_accs = []
+
+    for n_drop in range(5):
+        for ablation in itertools.combinations(range(5), r=n_drop):
+            short_id = ''.join(ch for ch in 'ABCDE' if (ord(ch) - ord('A')) not in ablation)
+            print()
+            print(short_id)
+            ablated = MultipleFeaturesClassifier(ablation)
+            accuracies = ablated.evaluate()
+
+            labels.append(short_id)
+            valid_accs.append(accuracies['validation'])
+            test_accs.append(accuracies['test'])
+
+    labels.reverse()
+    valid_accs.reverse()
+    test_accs.reverse()
+
+    print("labels = {}".format(labels))
+    print("valid_accs = {}".format(valid_accs))
+    print("test_accs = {}".format(test_accs))
+
