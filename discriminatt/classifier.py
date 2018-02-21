@@ -88,6 +88,36 @@ class AttributeClassifier:
             )
 
 
+class RelatednessClassifier(AttributeClassifier):
+    def __init__(self):
+        self.wrap = VectorSpaceWrapper(
+            get_external_data_filename('numberbatch-20180108-biased.h5'),
+            use_db=False
+        )
+        self.cache = {}
+
+    def get_vector(self, uri):
+        if uri in self.cache:
+            return self.cache[uri]
+        else:
+            vec = normalize_vec(self.wrap.get_vector(uri))
+            self.cache[uri] = vec
+            return vec
+
+    def get_similarity(self, uri1, uri2):
+        return self.get_vector(uri1).dot(self.get_vector(uri2))
+
+    def direct_relatedness(self, example):
+        match1 = max(0, self.get_similarity(example.node1(), example.att_node())) ** 0.5
+        match2 = max(0, self.get_similarity(example.node2(), example.att_node())) ** 0.5
+        return match1 - match2
+
+    def classify(self, examples, mode):
+        return np.array(
+            [self.direct_relatedness(example) > .1 for example in examples]
+        )
+
+
 class MultipleFeaturesClassifier(AttributeClassifier):
     """
     Compute a number of numeric features from the examples, based on different
@@ -99,8 +129,10 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     files from that directory.
     """
     def __init__(self, ablate=()):
-        self.wrap = VectorSpaceWrapper(get_external_data_filename('numberbatch-20180108-biased.h5'),
-                                       use_db=False)
+        self.wrap = VectorSpaceWrapper(
+            get_external_data_filename('numberbatch-20180108-biased.h5'),
+            use_db=False
+        )
         self.cache = {}
         self.wp_db = None
         self.sme = None
@@ -242,8 +274,9 @@ class MultipleFeaturesClassifier(AttributeClassifier):
                 if a not in self.ablate
             ]
             print("Used [{}]".format(', '.join(used_feature_names)))
-        else:
+        if not self.ablate or self.ablate == (1, 2, 3, 4):
             print(coef_series)
+            print("Intercept:", self.svm.intercept_)
 
     def classify(self, examples, mode):
         inputs = normalize(self.extract_features(examples, mode=mode), axis=0, norm='l2')
@@ -279,4 +312,7 @@ if __name__ == '__main__':
     print("labels = {}".format(labels))
     print("valid_f1s = {}".format(valid_f1s))
     print("test_f1s = {}".format(test_f1))
+
+    relatedness = RelatednessClassifier()
+    print(relatedness.evaluate())
 
