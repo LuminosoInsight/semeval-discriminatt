@@ -5,6 +5,7 @@ import itertools
 import numpy as np
 import pandas as pd
 from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
+from sklearn.metrics import f1_score
 from sklearn.preprocessing import normalize
 from sklearn.svm import LinearSVC
 from tqdm import tqdm as progress_bar
@@ -47,15 +48,15 @@ class AttributeClassifier:
         """
         raise NotImplementedError
 
-    def show_acc(self, our_answers, real_answers, mode):
-        acc = np.equal(our_answers, real_answers).sum() / len(real_answers)
-        acc_error = ((acc * (1 - acc)) / len(real_answers)) ** 0.5
-        print("{} accuracy: {:.2%} ± {:.2%}".format(mode, acc, acc_error))
-        return acc
+    def show_f1(self, our_answers, real_answers, mode):
+        f1 = f1_score(real_answers, our_answers, average='macro')
+        f1_error = ((f1 * (1 - f1)) / len(real_answers)) ** 0.5
+        print("{} f1 (macro): {:.2%} ± {:.2%}".format(mode, f1, f1_error))
+        return f1
 
     def evaluate(self):
         """
-        Train this learning strategy, and evaluate its accuracy on the validation set.
+        Train this learning strategy, and evaluate its f1 on the validation set.
         """
         examples = {
             'train': read_semeval_data('training/train.txt'),
@@ -64,15 +65,15 @@ class AttributeClassifier:
         }
 
         self.train(examples['train'])
-        accuracies = {}
+        f1s = {}
         for mode in ['train', 'validation', 'test']:
-            this_acc = self.show_acc(
+            this_f1 = self.show_f1(
                 self.classify(examples[mode], mode),
                 [example.discriminative for example in examples[mode]],
                 mode
             )
-            accuracies[mode] = this_acc
-        return accuracies
+            f1s[mode] = this_f1
+        return f1s
 
     def run_test(self):
         test_examples = read_blind_semeval_data('test/test_triples.txt')
@@ -202,7 +203,6 @@ class MultipleFeaturesClassifier(AttributeClassifier):
     def sme_features(self, example):
         if self.sme is None:
             self.sme = StandaloneSMEModel(get_external_data_filename('sme-20180129'))
-        features = []
         node1 = example.node1()
         node2 = example.node2()
         att = example.att_node()
@@ -290,8 +290,8 @@ if __name__ == '__main__':
     multiple_features.run_test()
 
     labels = []
-    valid_accs = []
-    test_accs = []
+    valid_f1s = []
+    test_f1 = []
 
     for n_drop in range(5):
         for ablation in itertools.combinations(range(5), r=n_drop):
@@ -299,19 +299,19 @@ if __name__ == '__main__':
             print()
             print(short_id)
             ablated = MultipleFeaturesClassifier(ablation)
-            accuracies = ablated.evaluate()
+            f1s = ablated.evaluate()
 
             labels.append(short_id)
-            valid_accs.append(accuracies['validation'])
-            test_accs.append(accuracies['test'])
+            valid_f1s.append(f1s['validation'])
+            test_f1.append(f1s['test'])
 
     labels.reverse()
-    valid_accs.reverse()
-    test_accs.reverse()
+    valid_f1s.reverse()
+    test_f1.reverse()
 
     print("labels = {}".format(labels))
-    print("valid_accs = {}".format(valid_accs))
-    print("test_accs = {}".format(test_accs))
+    print("valid_f1s = {}".format(valid_f1s))
+    print("test_f1s = {}".format(test_f1))
 
     relatedness = RelatednessClassifier()
     print(relatedness.evaluate())
