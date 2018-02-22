@@ -8,7 +8,7 @@ setup(
     platforms=["any"],
     description="Attempting SemEval-2018 task 10: Capturing Discriminative Attributes",
     packages=['discriminatt'],
-    install_requires=['wordfreq', 'numpy', 'pandas', 'scikit-learn', 'attrs'],
+    install_requires=['wordfreq', 'numpy', 'pandas', 'scikit-learn', 'attrs', 'conceptnet', 'nltk'],
     zip_safe=False,
     classifiers=[
         "Programming Language :: Python :: 3",
