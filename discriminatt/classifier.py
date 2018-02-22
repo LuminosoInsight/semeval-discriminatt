@@ -1,15 +1,10 @@
 import os
 import sqlite3
-import itertools
 
+import itertools
 import numpy as np
 import pandas as pd
 from conceptnet5.vectors.query import VectorSpaceWrapper, normalize_vec
-from sklearn.metrics import f1_score
-from sklearn.preprocessing import normalize
-from sklearn.svm import LinearSVC
-from tqdm import tqdm as progress_bar
-
 from discriminatt.data import (
     read_semeval_data, read_blind_semeval_data,
     get_external_data_filename, get_result_filename, read_search_queries
@@ -18,7 +13,11 @@ from discriminatt.phrases import phrase_weight
 from discriminatt.standalone_sme import StandaloneSMEModel
 from discriminatt.wikipedia import wikipedia_connected_conceptnet_nodes
 from discriminatt.wordnet import wordnet_connected_conceptnet_nodes
-
+from sklearn.metrics import classification_report
+from sklearn.metrics import f1_score
+from sklearn.preprocessing import normalize
+from sklearn.svm import LinearSVC
+from tqdm import tqdm as progress_bar
 
 np.random.seed(0)
 
@@ -48,10 +47,11 @@ class AttributeClassifier:
         """
         raise NotImplementedError
 
-    def show_f1(self, our_answers, real_answers, mode):
+    def show_results(self, our_answers, real_answers, mode):
         f1 = f1_score(real_answers, our_answers, average='macro')
         f1_error = ((f1 * (1 - f1)) / len(real_answers)) ** 0.5
         print("{} f1 (macro): {:.2%} ± {:.2%}".format(mode, f1, f1_error))
+        print(classification_report(real_answers, our_answers))
         return f1
 
     def evaluate(self):
@@ -67,12 +67,12 @@ class AttributeClassifier:
         self.train(examples['train'])
         f1s = {}
         for mode in ['train', 'validation', 'test']:
-            this_f1 = self.show_f1(
+            f1 = self.show_results(
                 self.classify(examples[mode], mode),
                 [example.discriminative for example in examples[mode]],
                 mode
             )
-            f1s[mode] = this_f1
+            f1s[mode] = f1
         return f1s
 
     def run_test(self):
@@ -315,4 +315,3 @@ if __name__ == '__main__':
 
     relatedness = RelatednessClassifier()
     print(relatedness.evaluate())
-
